@@ -1,118 +1,107 @@
+var keys = require("./keys.js");
+var request = require("request");
 var fs = require("fs");
-var request = require('request');
-var Twitter = require('twitter');
-var spotify = require('spotify');
-var client = require("./keys.js").twitterkeys;
+var Twitter = require("twitter");
+var twitter = new Twitter(keys.twitter);
+var tUser = "eddiegartland";
+var action = process.argv[2].toLowerCase();
+var title = process.argv[3];
+var Spotify = require("node-spotify-api");
+var spotify = new Spotify(keys.spotify);
+for (i = 4; i < process.argv.length; i++) {
+    if (!undefined && !null) {
+        title += '+' + process.argv[i];
+    }
+};
+myStuff();
+function myStuff() {
 
-var to_do = process.argv[2]; //Grabs the argument that tells the program what process to accomplish
-var queryArr = [];
-var skip_Default = false; //Variable to make sure the default if statement is triggered when random.txt is used
 
-//Loops through all the search for arguments passed and stores them into an array
-for (var i = 3; i < process.argv.length; i++) {
 
-    queryArr.push(process.argv[i]);
-}
+    if (action === "spotify-this") {
+        spotifyF(action, title);
+    }
 
-//Takes search for array arguments and converts them to string
-var query = queryArr.toString(); 
-
-//Replaces all commas with spaces to clean up string used for searching apis
-for (var n = 0; n < query.length; n++) {
-    query = query.replace(",", " ");
-}
-
-//Declaring user name for Twitter function
-var params = {
-    screen_name: 'eddiegartland'
+    if (action === "my-tweets") {
+        twitterF(action, title);
+    }
+    if (action === "movie-this") {
+        moviesF(action, title);
+    }
+    if (action === "do-what-it-says") {
+        doWhatF();
+    }
 };
 
-//Calling the function to trigger functionality of program
-check_it();
 
-//Function used to check if reading off of random.txt or performing other functions
-function check_it() {
-    if (to_do === "do-what-it-says") {
-        var data = fs.readFileSync("random.txt", "utf8");
-        var split = data.split(",");
-        to_do = split[0].toString();
-        //Grabs other arguments grabbed from random.txt if they are there
-        if (split.length > 1) { 
-            query = split[1].toString();
-            skip_Default = true; //used to stop default search of other functions from being triggered
+function twitterF(action, title) {
+    twitter.get('statuses/user_timeline', tUser, gotData);
+    function gotData(error, data, response) {
+        var tweets = data;
+        for (var i = 0; i < tweets.length; i++) {
+            console.log(tweets[i].text);
+            console.log(tweets[i].created_at);
         }
-        //Calls function to perform process specified in random.txt
-        performFunction(to_do, query); 
-    } 
-    //Runs function to perform process specified that does not include random.txt
-    else { 
-        performFunction(to_do, query);
     }
-}
+};
 
-//Function made to perform process specfied in to_do
-function performFunction(to_do, query) {
-    //Grabs all tweets and displays them
-    if (to_do === "my-tweets") {
-        client.get('statuses/user_timeline', params, function (error, tweets, response) {
-            if (!error) {
-                console.log("Here are your tweets!");
-                for (var x = 0; x < tweets.length; x++) {
-                    console.log(tweets[x].text);
-                }
-            }
-        });
-    }
+function moviesF(action, title) {
 
-    //Searches Spotify with user provided input
-    if (to_do === "spotify-this-song") {
-        //Default process if no user input specified
-        if (process.argv.length < 4 && skip_Default === false) {
-            query = "meWithoutYou Mexican War Streets";
+    // Then run a request to the OMDB API with the movie specified
+    var queryUrl = "http://www.omdbapi.com/?t=" + title + "&y=&plot=short&apikey=40e9cece";
+
+    // This line is just to help us debug against the actual URL.
+    console.log(queryUrl);
+
+    request(queryUrl, function (error, response, body) {
+
+        // If the request is successful
+        if (!error && response.statusCode === 200) {
+            body = JSON.parse(body);
+            // Parse the body of the site and recover just the imdbRating
+            // (Note: The syntax below for parsing isn't obvious. Just spend a few moments dissecting it).
+            console.log("")
+            console.log("Title:                  " + body.Title + '\n');
+            console.log("Release Year:           " + body.Year);
+            console.log("IMDB Rating:            " + body.imdbRating)
+            console.log("Rotten Tomatoes Rating: " + body.Ratings[1].Value)
+            console.log("Production Country:     " + body.Country)
+            console.log("Language:               " + body.Language)
+            console.log("Actors:                 " + body.Actors)
+            console.log("Plot:                   " + body.Plot)
+        };
+    });
+};
+
+function spotifyF(action, title) {
+
+    spotify.search({
+        type: 'track',
+        query: title
+    }, function (err, data) {
+        if (err) {
+            console.log('Error occurred: ' + err);
+            return;
         }
-
-        //Searched Spotify
-        spotify.search({
-            type: 'track',
-            query: query
-        }, function (err, data) {
-            if (err) {
-                console.log('Error occurred: ' + err);
-                return;
-            }
-
-            console.log("You searched Spotify for: " + query);
-            console.log("The name of the Artist found is " + data.tracks.items[0].album.artists[0].name);
-            console.log("The name of the album it is found on is " + data.tracks.items[0].album.name);
-            console.log("The link to the url to find this at is:");
-            console.log(data.tracks.items[0].album.external_urls.spotify);
-
-
-        });
-    }
-
-    //Searched imdb if specified to
-    if (to_do === "movie-this") {
-        //Default process if no user input specified
-        if (process.argv.length < 4 && skip_Default === false) {
-            query = "Mr. Nobody";
+        else {
+            var songInfo = data.tracks.items[0];
+            console.log("Song Title: " + songInfo.name + '\n');
+            console.log("Artist: " + songInfo.artists[0].name + '\n')
+            console.log("Album: " + songInfo.album.name + '\n')
+            console.log("Preview URL: " + songInfo.preview_url + '\n')
         }
-        var queryUrl = "http://www.omdbapi.com/?t=" + query + "&y=&plot=short&r=json";
-        //Searches imdb
-        request(queryUrl, function (error, response, body) {
+    })
+};
 
-            if (!error && response.statusCode === 200) {
-                console.log("The title of the movie is " + JSON.parse(body).Title);
-                console.log("The year the movie was released was " + JSON.parse(body).Year);
-                console.log("The movie rating is " + JSON.parse(body).imdbRating);
-                console.log("The movie was produced in " + JSON.parse(body).Country);
-                console.log("The language spoken in the movie is " + JSON.parse(body).Language);
-                console.log("The movie plot: " + JSON.parse(body).Plot);
-                console.log("The actors are " + JSON.parse(body).Actors);
-                console.log("The Rotten Tomatoes score is " + JSON.parse(body).Ratings[1].Value);
-                console.log("Poster URL " + JSON.parse(body).Poster);
+function doWhatF() {
+    fs.readFile("random.txt", "utf8", function (error, data) {
+        console.log(data);
+        var dataArr = data.split(',')
 
-            }
-        });
-    }
-}
+        if (dataArr.length == 2) {
+            (dataArr[0], dataArr[1]);
+        } else if (dataArr.length == 1) {
+            (dataArr[0]);
+        };
+    })
+};
